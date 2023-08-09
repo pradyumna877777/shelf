@@ -1,23 +1,26 @@
 package com.example.Shelf.service;
+import com.amazonaws.services.s3.model.ObjectMetadata;
+import com.example.Shelf.model.User;
 import com.example.Shelf.model.UserProfile;
 import com.example.Shelf.repository.UserProfileRepository;
+import com.example.Shelf.repository.UserRepository;
+import jakarta.persistence.EntityNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
-import com.amazonaws.auth.AWSStaticCredentialsProvider;
-import com.amazonaws.auth.BasicAWSCredentials;
+import com.amazonaws.services.s3.model.GeneratePresignedUrlRequest;
 import com.amazonaws.services.s3.AmazonS3;
-import com.amazonaws.services.s3.AmazonS3ClientBuilder;
-//import org.springframework.data.domain.Page;
-//import org.springframework.data.domain.PageRequest;
-//import org.springframework.data.domain.Pageable;
+import com.amazonaws.HttpMethod;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.IOException;
+import java.net.URL;
+import java.util.Date;
 
 
 @Service
 public class UserProfileService {
 
-    AmazonS3 s3Client = AmazonS3ClientBuilder.standard()
-            .withCredentials(DefaultAWSCredentialsProviderChain.getInstance())
-            .build();
+
     @Autowired
     private AmazonS3 amazonS3Client;
 
@@ -25,16 +28,37 @@ public class UserProfileService {
     @Autowired
     private UserProfileRepository userProfileRepository;
 
+    @Autowired
+    private UserRepository userRepository;
+
     private static final String S3_BUCKET_NAME = "shelfbackend";
 
     public void uploadProfileImage(Long userId, MultipartFile file) throws IOException {
         String key = userId + "/" + file.getOriginalFilename();
-        amazonS3Client.putObject(S3_BUCKET_NAME, key, file.getInputStream(), null);
+        System.out.println(userId);
+        User user = userRepository.findById(userId).orElse(null);
+
+        if(user == null){
+            throw new EntityNotFoundException("User not found");
+        }
+
+        ObjectMetadata metadata = new ObjectMetadata();
+
+        metadata.setContentLength(file.getSize());
+
+        amazonS3Client.putObject(S3_BUCKET_NAME, key, file.getInputStream(), metadata);
 
         UserProfile userProfile = userProfileRepository.findByUserId(userId)
-                .orElse(new UserProfile(userId, ""));
+                .orElse(null);
+
+        if(userProfile == null){
+          userProfile = new UserProfile();
+          userProfile.setUser(user);
+        }
+
         userProfile.setImageUrl(getS3ImageUrl(key));
         userProfileRepository.save(userProfile);
+
     }
 
     public void deleteProfileImage(Long userId) {
@@ -48,12 +72,6 @@ public class UserProfileService {
 
         userProfile.setImageUrl("");
         userProfileRepository.save(userProfile);
-    }
-
-    public void updateProfileImage(Long userId, MultipartFile file) throws IOException {
-        deleteProfileImage(userId); // Delete existing image
-
-        uploadProfileImage(userId, file); // Upload new image
     }
 
     public String getProfileImageUrl(Long userId) {

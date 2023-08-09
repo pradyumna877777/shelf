@@ -4,23 +4,20 @@ import lombok.*;
 
 @Getter
 @Setter
-@Entity
+@Entity(name = "app_user")
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-public class UserProfile {
+public class User {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    @OneToOne
-    private User user;
-    @Column
-    private String imageUrl;
+
+    @Column(unique = true)
+    private String username;
+
+    private String password;
+
+    private String email;
 
 }
-
-
-
-
-
-
